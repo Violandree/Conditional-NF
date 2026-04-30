@@ -1,0 +1,20 @@
+# Python Virtual Environment
+CNFvenv/
+
+# Datasets
+data/
+
+# Model Checkpoints and Outputs
+results/
+*.pt
+
+# Training Logs
+tensorboard_logs/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE Settings
+.vscode/
