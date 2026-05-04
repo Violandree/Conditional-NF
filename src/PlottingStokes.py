@@ -11,6 +11,7 @@ import matplotlib.gridspec as gridspec
 import dolfin as fe
 
 def plot_stokes_solution(indices, data, Vh):
+
     n_plots = len(indices)
     cols = math.ceil(math.sqrt(n_plots))
     rows = math.ceil(n_plots / cols)
@@ -37,7 +38,7 @@ def plot_stokes_solution(indices, data, Vh):
         u_func.vector()[:] = u_tensor
 
         c = fe.plot(u_func, cmap='jet')
-        plt.colorbar(c, ax=ax, shrink = 0.5, label='Conncentration (u)')
+        plt.colorbar(c, ax=ax, shrink = 0.5, label='Concentration (u)')
 
         title_str = (
             f"$\\epsilon$ = {eps_val:.5f}, $\\theta$ = {theta_val:.3f} rad\n"
@@ -335,7 +336,7 @@ def Likelihood_Comparison_Stokes(flow, u, mu, V,
 
     sc = plt.scatter(arr_dist, arr_like, c=arr_like, cmap='viridis', alpha=0.6, s=30)
 
-    plt.scatter([0], [target_like], c='red', s=200, label='Target $(\mu_0, u_0)$', edgecolors='black', zorder=10)
+    plt.scatter([0], [target_like], c='red', s=200, label='Target $(\mu_0, y_0)$', edgecolors='black', zorder=10)
     plt.axhline(y=target_like, color='red', linestyle='--', alpha=0.4)
 
     plt.yscale('symlog', linthresh=1000)
@@ -355,7 +356,7 @@ def Likelihood_Comparison_Stokes(flow, u, mu, V,
     plt.tick_params(axis='x', labelsize=13)
 
     plt.xlabel(r'$||\mu_k - \mu_0||_2$', fontsize=15)
-    plt.ylabel(r'Log-Likelihood $\log p(u_k | \mu_0)$', fontsize=15)
+    plt.ylabel(r'Log-Likelihood $\log p(y_k | \mu_0)$', fontsize=15)
     plt.title(f'Global Robustness Analysis\nTarget Likelihood: {target_like:.2f}', fontsize=16)
 
     cbar = plt.colorbar(sc, label='Log-Likelihood', shrink=0.7)
@@ -369,7 +370,8 @@ def Likelihood_Comparison_Stokes(flow, u, mu, V,
 
     return arr_dist, arr_like
 
-def plot_marginal_conditional_density_stokes(u_replica_true, u_rec, WD, indices, labels=None):
+
+def plot_marginal_conditional_density_stokes(u_replica_true, u_rec, indices):
 
     if isinstance(u_replica_true, torch.Tensor):
         u_replica_true = u_replica_true.detach().cpu().numpy()
@@ -378,52 +380,36 @@ def plot_marginal_conditional_density_stokes(u_replica_true, u_rec, WD, indices,
         u_rec = u_rec.detach().cpu().numpy()
 
     n_plots = len(indices)
-
-    # Calcolo colonne e righe in modo sicuro (anche per numeri dispari)
-    cols = math.ceil(n_plots / 2)
-    rows = 2
-
+    cols = min(n_plots, 3)
+    rows = math.ceil(n_plots / cols) if n_plots > 0 else 1
     fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
 
-    # --- CORREZIONE FONDAMENTALE ---
-    # Appiattiamo l'array 2D degli assi in un array 1D per iterarci sopra facilmente
-    if n_plots > 1:
-        axes_flat = axes.flatten()
-    else:
+    if n_plots == 1:
         axes_flat = [axes]
+    else:
+        axes_flat = axes.flatten()
 
     for k, node_idx in enumerate(indices):
-        # Se abbiamo creato più slot del necessario (es. griglia dispari),
-        # interrompiamo se superiamo il numero di assi
-        if k >= len(axes_flat):
-            break
-
         ax = axes_flat[k]
 
         data_true = u_replica_true[:, node_idx]
         data_rec = u_rec[:, node_idx]
 
-        if isinstance(WD, torch.Tensor):
-            wd_val = WD[node_idx].item()
-        else:
-            wd_val = WD[node_idx]
-
-        # --- Plot TRUE DATA (Blu) ---
         sns.histplot(data_true, ax=ax, color='blue', stat='density', kde=True,
                      label='True Physical Dist.', element="step", alpha=0.3)
 
-        # --- Plot GENERATED DATA (Rosso) ---
         sns.histplot(data_rec, ax=ax, color='red', stat='density', kde=True,
                      label='Generated (NF)', element="step", alpha=0.3)
 
-        pt_label = labels[k] if labels and k < len(labels) else f"Node {node_idx}"
-        ax.set_title(f"{pt_label}\n(WD: {wd_val:.4f})", fontsize=12)
-        ax.set_xlabel("Concentration")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_title("")
 
         if k == 0:
             ax.legend()
 
-    # Nascondi eventuali assi vuoti (se n_plots è dispari)
     for j in range(n_plots, len(axes_flat)):
         axes_flat[j].axis('off')
 
