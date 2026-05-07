@@ -5,7 +5,7 @@ import torch
 from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
 
-from src.NFmodel import NormalizingFlow
+from PODCNF.NFmodel import NormalizingFlow
 
 def train_one_epoch(model, train_loader, optimizer, device):
     """
