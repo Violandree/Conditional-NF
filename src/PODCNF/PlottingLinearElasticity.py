@@ -13,7 +13,7 @@ import dolfin as fe
 
 from dlroms import *
 
-from src.DataGeneration.LinearElasticityData import FOMsampler
+from PODCNF.DataGeneration.LinearElasticityData import FOMsampler
 
 def visualize_elasticity_variability(mass_val, delta_val, Vh):
 
