@@ -58,7 +58,6 @@ def visualize_elasticity_variability(mass_val, delta_val, Vh):
     plt.show()
 
 def plot_data(g_tensor, u_tensor, Vh, V_lam, mu=None, theta=None):
-    # Importiamo dolfin come 'df' per evitare conflitti con 'dlroms' che sovrascrive 'fe'
     import dolfin as df
     import matplotlib.pyplot as plt
     import numpy as np
@@ -71,92 +70,67 @@ def plot_data(g_tensor, u_tensor, Vh, V_lam, mu=None, theta=None):
         u_data = np.array(u_tensor).flatten()
     u_func.vector().set_local(u_data)
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, ax = plt.subplots(figsize=(8, 8))
 
-    # --- 1. Material (g) ---
-    plt.sca(axes[0])
+    mesh = Vh.mesh()
+    original_coords = mesh.coordinates()
+    cells = mesh.cells()
 
-    title_mat = "Property of the material"
-    theta_val = None
+    u_vals = u_func.compute_vertex_values(mesh)
+    N = mesh.num_vertices()
+    u_x = u_vals[:N]
+    u_y = u_vals[N:]
+    
+    def_x = original_coords[:, 0] + u_x
+    def_y = original_coords[:, 1] + u_y
+
+    u_mag = np.sqrt(u_x**2 + u_y**2)
+    ax.tripcolor(def_x, def_y, cells, u_mag, cmap='viridis', shading='gouraud')
+
+    max_y = np.max(original_coords[:, 1])
+    top_nodes = np.where(np.abs(original_coords[:, 1] - max_y) < 1e-5)[0]
+
+    mid_x = (np.max(original_coords[:, 0]) + np.min(original_coords[:, 0])) / 2.0
+    top_center_idx = top_nodes[np.argmin(np.abs(original_coords[top_nodes, 0] - mid_x))]
+
+    def_top_x = def_x[top_center_idx]
+    def_top_y = def_y[top_center_idx]
+
+    ax.plot([0, 1], [0.5, 0.5], color='black', linestyle='--', linewidth=1.5, zorder=10)
 
     if theta is not None:
         try:
             theta_val = theta.item() if torch.is_tensor(theta) else theta
-            theta_deg = np.degrees(theta_val)
-            title_mat += f"\n$\\theta={theta_deg:.1f}^\\circ$"
+            x_line = np.linspace(0, 1, 100)
+            y_line = 0.5 + (x_line - 0.5) * np.tan(theta_val)
+            mask_line = (y_line >= 0) & (y_line <= 1)
+
+            if np.any(mask_line):
+                ax.plot(x_line[mask_line], y_line[mask_line], 'k-', linewidth=3.0, zorder=11)
+
+            ax.text(0.65, 0.52, r'$\theta$', fontsize=18, color='black', zorder=15)
         except:
             pass
 
-    axes[0].set_title(title_mat)
-    axes[0].set_xlabel("x")
-    axes[0].set_ylabel("y")
+    domain_width = np.max(original_coords[:, 0]) - np.min(original_coords[:, 0])
+    R = 0.05 * domain_width if domain_width > 0 else 0.05
 
-    if theta_val is not None:
-        N_px = 400
-        x_grid = np.linspace(0, 1, N_px)
-        y_grid = np.linspace(0, 1, N_px)
-        X, Y = np.meshgrid(x_grid, y_grid)
-        x_c, y_c = 0.5, 0.5
-        cos_m = np.cos(theta_val)
-        sin_m = np.sin(theta_val)
-        mask = (Y - y_c) * cos_m - (X - x_c) * sin_m > 0
-        Z = np.where(mask, 7.1, 0.1)
-        axes[0].imshow(Z, extent=[0, 1, 0, 1], origin='lower', cmap='YlOrBr', interpolation='nearest')
-        axes[0].plot([0, 1], [0.5, 0.5], color='gray', linestyle='--', linewidth=1.5, alpha=0.8)
-        x_line = np.linspace(0, 1, 100)
-        y_line = 0.5 + (x_line - 0.5) * np.tan(theta_val)
-        mask_line = (y_line >= 0) & (y_line <= 1)
-        if np.any(mask_line):
-            axes[0].plot(x_line[mask_line], y_line[mask_line], 'k-', linewidth=2.5)
+    ball_x = def_top_x
+    ball_y = def_top_y + R
+    circle = plt.Circle((ball_x, ball_y), R, color='lightgray', ec='black', lw=1.5, zorder=20)
+    ax.add_patch(circle)
+    ax.text(ball_x, ball_y, '$\delta$', fontsize=16, ha='center', va='center', zorder=21)
+    ax.annotate(r'm',
+                xy=(ball_x, ball_y + R),
+                xytext=(ball_x, ball_y + 2.5 * R),
+                arrowprops=dict(facecolor='black', shrink=0.0, width=2, headwidth=8),
+                fontsize=20, ha='center', va='bottom', zorder=20)
 
-    else:
-        g_func = df.Function(V_lam)
-        if torch.is_tensor(g_tensor):
-            g_d = g_tensor.detach().cpu().numpy().flatten()
-        else:
-            g_d = np.array(g_tensor).flatten()
-        g_func.vector().set_local(g_d)
-        df.plot(g_func, cmap='YlOrBr')
+    ax.axis('equal')
+    ax.axis('off')
+    plt.margins(0)
+    plt.tight_layout(pad=0)
 
-    # --- 2. Deformation (u) ---
-    plt.sca(axes[1])
-    title_def = "True solution (Deformation)"
-    if mu is not None:
-        try:
-            if torch.is_tensor(mu):
-                mu_vals = mu.detach().cpu().numpy().flatten()
-            else:
-                mu_vals = np.array(mu).flatten()
-            title_def += f"\n$\\mu$ = [{mu_vals[0]:.2f}, {mu_vals[1]:.2f}]"
-        except:
-            pass
-
-    axes[1].set_title(title_def)
-    mesh = Vh.mesh()
-    original_coords = mesh.coordinates().copy()
-
-    try:
-        # Usiamo df.ALE e df.plot per essere sicuri di usare FEniCS
-        df.ALE.move(mesh, u_func)
-
-        # Calcolo magnitudo per il colore
-        u_magnitude = df.sqrt(df.dot(u_func, u_func))
-        V_scalar = df.FunctionSpace(mesh, 'CG', 1)
-        mag_plot = df.project(u_magnitude, V_scalar)
-
-        c2 = df.plot(mag_plot, cmap='jet')
-        plt.colorbar(c2, ax=axes[1], shrink=0.8, label='Displacement magnitude')
-
-    except Exception as e:
-        # Fallback in caso di errore su ALE.move
-        print(f"Warning: ALE move failed, plotting displacement directly. Error: {e}")
-        df.plot(u_func, mode='displacement')
-
-    finally:
-        # Ripristina sempre le coordinate originali della mesh
-        mesh.coordinates()[:] = original_coords
-
-    plt.tight_layout()
     plt.show()
 
 def plot_conditional_same_mu(n_generations,
